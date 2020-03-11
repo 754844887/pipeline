@@ -1,0 +1,87 @@
+def ARRAY_MAP = ['wb_strategy', 'wb_system', 'wb_adapter', 'wb_gateway']
+
+pipeline {
+    // 指定jenkins slave节点(label需与jenkins slave节点配置的label一致)
+    agent { label 'jenkins-slave' }
+    
+    // 定义构建参数
+    parameters { 
+        choice(name: 'ENV_CHOICE', choices: 'dev\ntest', description: '选择部署环境？')    
+        booleanParam(name: 'wb_strategy', defaultValue: true, description: '是否构建wb-strategy？') 
+        booleanParam(name: 'wb_system', defaultValue: true, description: '是否构建wb-system？') 
+        booleanParam(name: 'wb_adapter', defaultValue: true, description: '是否构建wb-adapter？') 
+        booleanParam(name: 'wb_gateway', defaultValue: true, description: '是否构建wb-gateway？')        
+    }
+
+
+
+
+
+
+	
+	
+    
+    // 指定流水线执行超时时间
+    options {
+        timeout(time: 1, unit: 'HOURS') 
+    }   
+    
+    // 定义环境变量
+    environment { 
+               AN_ACCESS_KEY = credentials('harbor') // jenkins凭据,使用密文的方式在后续step中使用
+               HARBOR_DOMAIN = 'shinetech-harbor.com' // 镜像仓库地址
+               PROJECT = 'dev'  // 镜像仓库的项目名称
+               DEV_HOST = 'tcp://192.168.0.83:2375' // 部署开发环境的主机地址
+               TEST_HOST = 'tcp://192.168.0.88:2375'   // 部署测试环境的主机地址       
+            }
+            
+    // 需与jenkins页面全局工具配置中的名称保持一致,用于后续step调用        
+    tools {
+        maven 'maven-3.3.9' 
+    }
+    stages {
+        // checkout 代码
+        stage ('checkout') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/3.0']], 
+                doGenerateSubmoduleConfigurations: false, 
+                extensions: [], 
+                submoduleCfg: [], 
+                userRemoteConfigs: [[credentialsId: 'ef186c77-ca33-4746-b343-d6ff5d450a71', 
+                url: 'http://shinetech@192.168.0.72:9091/shinetech/workbench.git']]]) 
+            }
+        }
+        
+   
+        
+        // 生成镜像并推送到镜像仓库,允许保留多个镜像版本,最新的版本指向latest
+        stage('Build') {          
+            steps {       
+                 script {
+				    ARRAY_MAP.each {
+					 println("喵喵喵！琳--------"+it.toString()+"............."+params.(it.toString()))
+					  if(params.(it.toString())){
+                   println("喵喵喵！琳")
+							def my = it.toString().replaceAll("_","-");
+							 println("喵喵喵========="+my)
+                            sh(script: "cp $WORKSPACE/${my}/target/${my}-1.0.0.war ${my}/build", returnStdout: true)
+                            sh(script: "cd ${my}/build && docker build --force-rm -t ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER} .", returnStdout: true)
+                            sh(script: "docker tag ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER} ${HARBOR_DOMAIN}/${PROJECT}/${my}:latest", returnStdout: true)
+                            sh(script: "docker login ${HARBOR_DOMAIN} -u ${AN_ACCESS_KEY_USR} -p ${AN_ACCESS_KEY_PSW}", returnStdout: true)
+                            sh(script: "docker push ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER}", returnStdout: true)
+                            sh(script: "docker push ${HARBOR_DOMAIN}/${PROJECT}/${my}:latest", returnStdout: true)
+					}else {
+                             println("跳过"+it.toString())
+                        }  
+					
+					}
+				 
+                 }            
+            }
+        }
+                                         
+        
+ 
+                                 
+        }
+    }
