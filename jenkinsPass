@@ -14,12 +14,11 @@ pipeline {
         booleanParam(name: 'wb_system', defaultValue: true, description: '是否构建wb-system？') 
         booleanParam(name: 'wb_adapter', defaultValue: true, description: '是否构建wb-adapter？') 
         booleanParam(name: 'wb_gateway', defaultValue: true, description: '是否构建wb-gateway？')  
-        booleanParam(name: 'wb_center', defaultValue: true, description: '是否构建'wb-center'？')  
-        booleanParam(name: 'wb_configserver', defaultValue: true, description: '是否构建'wb_configserver'？') 
-        booleanParam(name: 'wb_data', defaultValue: true, description: '是否构建'wb_data'？')         
+        booleanParam(name: 'wb_center', defaultValue: true, description: '是否构建wb-center？')  
+        booleanParam(name: 'wb_configserver', defaultValue: true, description: '是否构建wb_configserver？') 
+        booleanParam(name: 'wb_data', defaultValue: true, description: '是否构建wb_data？')         
     }
-
-    
+   
     // 指定流水线执行超时时间
     options {
         timeout(time: 1, unit: 'HOURS') 
@@ -38,6 +37,7 @@ pipeline {
     tools {
         maven 'maven-3.3.9' 
     }
+    
     stages {
         // checkout 代码
         stage ('checkout') {
@@ -50,26 +50,35 @@ pipeline {
                 url: 'http://shinetech@192.168.0.72:9091/shinetech/workbench.git']]]) 
             }
         }
-                  
+            
+
+        // maven 构建
+        stage('maven-Build') { 
+            steps {
+                sh 'mvn clean install -Dmaven.test.skip=true' 
+                 
+            }
+        }
+                    
         // 生成镜像并推送到镜像仓库,允许保留多个镜像版本,最新的版本指向latest
         stage('Build') {          
             steps {       
                  script {
-		    ARRAY_MAP.each {
-		      if(params.(it.toString())){
-			 def my = it.toString().replaceAll("_","-");
+                    ARRAY_MAP.each {
+                      if(params.(it.toString())){
+                         def my = it.toString().replaceAll("_","-");
                          sh(script: "cp $WORKSPACE/${my}/target/${my}-1.0.0.war ${my}/build", returnStdout: true)
                          sh(script: "cd ${my}/build && docker build --force-rm -t ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER} .", returnStdout: true)
                          sh(script: "docker tag ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER} ${HARBOR_DOMAIN}/${PROJECT}/${my}:latest", returnStdout: true)
                          sh(script: "docker login ${HARBOR_DOMAIN} -u ${AN_ACCESS_KEY_USR} -p ${AN_ACCESS_KEY_PSW}", returnStdout: true)
                          sh(script: "docker push ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER}", returnStdout: true)
                          sh(script: "docker push ${HARBOR_DOMAIN}/${PROJECT}/${my}:latest", returnStdout: true)
-		      } else {
-                            println("跳过构建"+it.toString())
+                    }else {
+                         println("跳过构建"+it.toString())
                         }  
-					
-		   }
-				 
+                    
+                    }
+                 
                  }            
             }
         }
@@ -78,20 +87,22 @@ pipeline {
         stage('Deploy') {           
             steps {
                     script {
-		       ARRAY_MAP.each {
-			 if(params.(it.toString())){
-			    def my = it.toString().replaceAll("_","-");
-                            sh(script: "cd ${my}/build && sed -i 's/^DEPLOY_ENV=.*\$/DEPLOY_ENV='$ENV_CHOICE'/' .env", returnStdout: true)
-                            if(ENV_CHOICE == "dev") {
-                              sh(script: "cd ${my}/build && docker-compose -H ${DEV_HOST} up -d", returnStdout: true)
-                            } else{
-                              sh(script: "cd ${my}/build && docker-compose -H ${TEST_HOST} up -d", returnStdout: true)
-                            }
+                    ARRAY_MAP.each {
+                      if(params.(it.toString())){
+                         def my = it.toString().replaceAll("_","-");
+                         sh(script: "cd ${my}/build && sed -i 's/^DEPLOY_ENV=.*\$/DEPLOY_ENV='$ENV_CHOICE'/' .env", returnStdout: true)
+                         if(ENV_CHOICE == "dev") {
+                             sh(script: "cd ${my}/build && docker-compose -H ${DEV_HOST} up -d", returnStdout: true)
+                         } else{
+                             sh(script: "cd ${my}/build && docker-compose -H ${TEST_HOST} up -d", returnStdout: true)
+                         }
                                               
-			   } else {
+                    }else {
                              println("跳过部署"+it.toString())
-                           }  					
-			}				 
+                        }  
+                    
+                    }
+                 
                  }
             }
         }                               
