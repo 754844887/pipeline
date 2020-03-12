@@ -55,20 +55,20 @@ pipeline {
         stage('Build') {          
             steps {       
                  script {
-				    ARRAY_MAP.each {
-					  if(params.(it.toString())){
-						 def my = it.toString().replaceAll("_","-");
+		    ARRAY_MAP.each {
+		      if(params.(it.toString())){
+			 def my = it.toString().replaceAll("_","-");
                          sh(script: "cp $WORKSPACE/${my}/target/${my}-1.0.0.war ${my}/build", returnStdout: true)
                          sh(script: "cd ${my}/build && docker build --force-rm -t ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER} .", returnStdout: true)
                          sh(script: "docker tag ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER} ${HARBOR_DOMAIN}/${PROJECT}/${my}:latest", returnStdout: true)
                          sh(script: "docker login ${HARBOR_DOMAIN} -u ${AN_ACCESS_KEY_USR} -p ${AN_ACCESS_KEY_PSW}", returnStdout: true)
                          sh(script: "docker push ${HARBOR_DOMAIN}/${PROJECT}/${my}:${BUILD_NUMBER}", returnStdout: true)
                          sh(script: "docker push ${HARBOR_DOMAIN}/${PROJECT}/${my}:latest", returnStdout: true)
-					}else {
-                             println("跳过构建"+it.toString())
+		      } else {
+                            println("跳过构建"+it.toString())
                         }  
 					
-					}
+		   }
 				 
                  }            
             }
@@ -78,22 +78,20 @@ pipeline {
         stage('Deploy') {           
             steps {
                     script {
-				    ARRAY_MAP.each {
-					  if(params.(it.toString())){
-						 def my = it.toString().replaceAll("_","-");
-                         sh(script: "cd ${my}/build && sed -i 's/^DEPLOY_ENV=.*\$/DEPLOY_ENV='$ENV_CHOICE'/' .env", returnStdout: true)
-                         if(ENV_CHOICE == "dev") {
-                             sh(script: "cd ${my}/build && docker-compose -H ${DEV_HOST} up -d", returnStdout: true)
-                         } else{
-                             sh(script: "cd ${my}/build && docker-compose -H ${TEST_HOST} up -d", returnStdout: true)
-                         }
+		       ARRAY_MAP.each {
+			 if(params.(it.toString())){
+			    def my = it.toString().replaceAll("_","-");
+                            sh(script: "cd ${my}/build && sed -i 's/^DEPLOY_ENV=.*\$/DEPLOY_ENV='$ENV_CHOICE'/' .env", returnStdout: true)
+                            if(ENV_CHOICE == "dev") {
+                              sh(script: "cd ${my}/build && docker-compose -H ${DEV_HOST} up -d", returnStdout: true)
+                            } else{
+                              sh(script: "cd ${my}/build && docker-compose -H ${TEST_HOST} up -d", returnStdout: true)
+                            }
                                               
-					}else {
+			   } else {
                              println("跳过部署"+it.toString())
-                        }  
-					
-					}
-				 
+                           }  					
+			}				 
                  }
             }
         }                               
